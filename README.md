@@ -1,25 +1,61 @@
-# Blockchain Learning Project
+# Document Verification Blockchain
 
-This project is a minimal educational blockchain service built with Flask. It
-includes a small in-memory blockchain implementation and a simple HTTP API for
-mining blocks, viewing the chain, and validating chain integrity.
+This project is an educational document verification service built with Flask,
+an in-memory blockchain, and a Streamlit UI. Users can queue document hashes,
+mine pending records into blocks, inspect the chain, and verify whether a
+document fingerprint exists on-chain.
 
-The codebase is intentionally lightweight and easy to read. It is designed for
-learning blockchain basics rather than for production use.
+The codebase is intentionally lightweight and readable. It is designed for
+learning and demos rather than for production use.
 
-## Current Features
+## Features
 
 - in-memory blockchain with a genesis block
 - basic proof-of-work mining
 - block hashing with SHA-256
-- chain validation
-- Flask HTTP API
+- document record queue for pending submissions
+- document verification against mined blocks
+- Flask HTTP API for blockchain and document workflows
+- Streamlit UI for local interaction without manual API calls
+
+## Project Files
+
+- `blockchain.py`: runnable Flask backend entrypoint
+- `document_verification/core.py`: blockchain and document queue logic
+- `document_verification/api.py`: Flask routes and request handling
+- `streamlit_app.py`: Streamlit user interface
+- `SPEC.md`: product specification for the MVP
+
+## Install Dependencies
+
+```bash
+pip install flask streamlit requests
+```
+
+## Run Locally
+
+1. Start the Flask backend:
+
+```bash
+python blockchain.py
+```
+
+2. In a separate terminal, start the Streamlit UI:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+3. Open the applications:
+
+- Flask API: `http://127.0.0.1:5000`
+- Streamlit UI: `http://localhost:8501`
 
 ## API Endpoints
 
 ### `GET /mine_block`
 
-Mines a new block and appends it to the chain.
+Mines a new block containing all pending document records.
 
 ### `GET /get_chain`
 
@@ -29,48 +65,35 @@ Returns the full blockchain and its length.
 
 Checks whether the blockchain is valid.
 
-## Project Files
+### `POST /add_document`
 
-- `blockchain.py`: Flask app and blockchain implementation
-- `SPEC.md`: planned product spec for extending this into a document
-  verification blockchain application
+Queues a document record to be included in the next block.
 
-## Run Locally
+Example request body:
 
-1. Create and activate a virtual environment if you want an isolated setup.
-2. Install Flask:
-
-```bash
-pip install flask
+```json
+{
+  "document_hash": "f1c9d2...",
+  "document_name": "certificate.pdf",
+  "issuer": "ABC Academy",
+  "owner": "John Doe",
+  "document_type": "certificate",
+  "issued_at": "2026-03-29"
+}
 ```
 
-3. Start the app:
+### `GET /pending_documents`
 
-```bash
-python blockchain.py
-```
+Returns all pending document records waiting to be mined.
 
-4. Open the API in your browser or API client:
+### `GET /verify_document/<document_hash>`
 
-- `http://127.0.0.1:5000/mine_block`
-- `http://127.0.0.1:5000/get_chain`
-- `http://127.0.0.1:5000/is_valid`
+Checks whether a document hash exists in any mined block.
 
 ## Notes
 
-- data is not persisted and resets when the app restarts
+- data is not persisted and resets when the server restarts
 - mining difficulty is fixed and intentionally simple
-- there is no peer-to-peer networking or consensus
+- duplicate document hashes are allowed for this MVP
+- there is no peer-to-peer networking, consensus, or authentication
 - this repository is for learning and experimentation
-
-## Planned Direction
-
-The repository also includes a specification for evolving the app into a
-document verification blockchain service with:
-
-- queued document records
-- mined document history
-- document verification endpoints
-- a Streamlit-based user interface
-
-See `SPEC.md` for the full roadmap.
