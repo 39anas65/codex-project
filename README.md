@@ -1,9 +1,10 @@
 # Document Verification Blockchain
 
 This project is an educational document verification service built with Flask,
-an in-memory blockchain, and a Streamlit UI. Users can queue document hashes,
-mine pending records into blocks, inspect the chain, and verify whether a
-document fingerprint exists on-chain.
+an in-memory blockchain, and a Streamlit UI. Users can upload documents,
+compute composite document hashes from file content plus metadata, mine pending
+records into blocks, inspect the chain, and verify whether a document
+fingerprint exists on-chain.
 
 The codebase is intentionally lightweight and readable. It is designed for
 learning and demos rather than for production use.
@@ -69,18 +70,15 @@ Checks whether the blockchain is valid.
 
 Queues a document record to be included in the next block.
 
-Example request body:
+Request format:
 
-```json
-{
-  "document_hash": "f1c9d2...",
-  "document_name": "certificate.pdf",
-  "issuer": "ABC Academy",
-  "owner": "John Doe",
-  "document_type": "certificate",
-  "issued_at": "2026-03-29"
-}
-```
+- `multipart/form-data`
+- required file field: `document_file`
+- optional text fields: `document_name`, `issuer`, `owner`, `document_type`,
+  `issued_at`, `document_summary`
+
+The backend computes `document_hash` automatically from the uploaded file and
+the provided metadata, and assigns `submitted_at` on the server.
 
 ### `GET /pending_documents`
 

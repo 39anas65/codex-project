@@ -1,6 +1,7 @@
 """Streamlit UI for the document verification blockchain service."""
 
 import os
+from io import BytesIO
 
 import requests
 import streamlit as st
@@ -36,17 +37,22 @@ st.markdown(
 )
 
 
-def api_request(method, path, payload=None):
+def api_request(method, path, payload=None, files=None):
     """Call the Flask backend and normalize the response for the UI."""
     base_url = st.session_state.get("api_base_url", DEFAULT_API_BASE_URL).rstrip("/")
     url = f"{base_url}{path}"
     try:
-        response = requests.request(
-            method=method,
-            url=url,
-            json=payload,
-            timeout=REQUEST_TIMEOUT_SECONDS,
-        )
+        request_kwargs = {
+            "method": method,
+            "url": url,
+            "timeout": REQUEST_TIMEOUT_SECONDS,
+        }
+        if files:
+            request_kwargs["data"] = payload
+            request_kwargs["files"] = files
+        else:
+            request_kwargs["json"] = payload
+        response = requests.request(**request_kwargs)
     except requests.RequestException as exc:
         return None, f"Could not reach the backend: {exc}"
 
@@ -76,8 +82,8 @@ st.title("Document Verification Blockchain")
 st.markdown(
     """
     <div class="hero">
-        Register document fingerprints, mine them into blocks, and verify later
-        that a document hash exists on-chain.
+        Upload a document, let the backend compute its fingerprint from the file
+        and metadata, then mine and verify that record on-chain.
     </div>
     """,
     unsafe_allow_html=True,
@@ -129,7 +135,7 @@ if page == "Dashboard":
     st.markdown(
         """
         <div class="status-card">
-            Use the sidebar to queue documents, inspect pending records, verify
+            Use the sidebar to upload documents, inspect pending records, verify
             a hash, or browse the blockchain.
         </div>
         """,
@@ -138,30 +144,54 @@ if page == "Dashboard":
 
 elif page == "Add Document":
     st.header("Add Document Record")
+    st.caption(
+        "Upload a document and optional metadata. The backend computes the "
+        "document hash automatically, and submission time is recorded for you."
+    )
     with st.form("add_document_form"):
-        document_hash = st.text_input("Document Hash (SHA-256)", max_chars=128)
+        document_file = st.file_uploader("Document File")
         document_name = st.text_input("Document Name")
         issuer = st.text_input("Issuer")
         owner = st.text_input("Owner")
         document_type = st.text_input("Document Type")
         issued_at = st.text_input("Issued At")
+        document_summary = st.text_input("One-Line Summary")
         submitted = st.form_submit_button("Queue Document")
 
     if submitted:
-        payload = {
-            "document_hash": document_hash,
-            "document_name": document_name,
-            "issuer": issuer,
-            "owner": owner,
-            "document_type": document_type,
-            "issued_at": issued_at,
-        }
-        data, error = api_request("POST", "/add_document", payload=payload)
-        if error:
-            st.error(error)
+        if document_file is None:
+            st.error("Please upload a document file.")
         else:
-            st.success(data["message"])
-            st.caption(f"Pending documents: {data['pending_count']}")
+            payload = {
+                "document_name": document_name,
+                "issuer": issuer,
+                "owner": owner,
+                "document_type": document_type,
+                "issued_at": issued_at,
+                "document_summary": document_summary,
+            }
+            file_bytes = document_file.getvalue()
+            files = {
+                "document_file": (
+                    document_file.name,
+                    BytesIO(file_bytes),
+                    document_file.type or "application/octet-stream",
+                )
+            }
+            data, error = api_request(
+                "POST",
+                "/add_document",
+                payload=payload,
+                files=files,
+            )
+            if error:
+                st.error(error)
+            else:
+                st.success(data["message"])
+                st.write("Computed Document Hash")
+                st.code(data["document_hash"], language="text")
+                st.caption(f"Pending documents: {data['pending_count']}")
+                st.json(data["document"])
 
 elif page == "Pending Documents":
     st.header("Pending Documents")

@@ -1,7 +1,7 @@
 """Flask application for the document verification blockchain service."""
 
 from flask import Flask, jsonify, request
-from werkzeug.exceptions import BadRequest
+from werkzeug.utils import secure_filename
 
 from .core import Blockchain
 
@@ -55,22 +55,32 @@ def create_app():
     @app.route("/add_document", methods=["POST"])
     def add_document():
         """Queue a document record to be included in the next mined block."""
-        try:
-            payload = request.get_json(force=False, silent=False)
-        except BadRequest:
-            return jsonify({"error": "Request body must be valid JSON."}), 400
+        if not request.content_type or "multipart/form-data" not in request.content_type:
+            return jsonify({"error": "Request body must be multipart/form-data."}), 400
 
-        if payload is None or not isinstance(payload, dict):
-            return jsonify({"error": "Request body must be valid JSON."}), 400
+        upload = request.files.get("document_file")
+        if upload is None:
+            return jsonify({"error": "document_file is required"}), 400
 
-        document_hash = str(payload.get("document_hash", "")).strip()
-        if not document_hash:
-            return jsonify({"error": "document_hash is required"}), 400
+        filename = secure_filename(upload.filename or "").strip()
+        if not filename:
+            return jsonify({"error": "document_file must include a filename"}), 400
 
-        blockchain.add_document(payload)
+        file_bytes = upload.read()
+        if not file_bytes:
+            return jsonify({"error": "document_file cannot be empty"}), 400
+
+        payload = request.form.to_dict(flat=True)
+        if not str(payload.get("document_name", "")).strip():
+            payload["document_name"] = filename
+
+        payload["document_hash"] = blockchain.build_document_hash(file_bytes, payload)
+        document = blockchain.add_document(payload)
         response = {
             "message": "Document record added to pending queue.",
             "pending_count": len(blockchain.pending_documents),
+            "document_hash": document["document_hash"],
+            "document": document,
         }
         return jsonify(response), 201
 
