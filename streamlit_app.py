@@ -36,17 +36,23 @@ st.markdown(
 )
 
 
-def api_request(method, path, payload=None):
+def api_request(method, path, payload=None, files=None, form_data=None):
     """Call the Flask backend and normalize the response for the UI."""
     base_url = st.session_state.get("api_base_url", DEFAULT_API_BASE_URL).rstrip("/")
     url = f"{base_url}{path}"
+    request_kwargs = {
+        "method": method,
+        "url": url,
+        "timeout": REQUEST_TIMEOUT_SECONDS,
+    }
+    if files is not None:
+        request_kwargs["files"] = files
+        request_kwargs["data"] = form_data or {}
+    else:
+        request_kwargs["json"] = payload
+
     try:
-        response = requests.request(
-            method=method,
-            url=url,
-            json=payload,
-            timeout=REQUEST_TIMEOUT_SECONDS,
-        )
+        response = requests.request(**request_kwargs)
     except requests.RequestException as exc:
         return None, f"Could not reach the backend: {exc}"
 
@@ -76,8 +82,8 @@ st.title("Document Verification Blockchain")
 st.markdown(
     """
     <div class="hero">
-        Register document fingerprints, mine them into blocks, and verify later
-        that a document hash exists on-chain.
+        Upload documents, store them in the database, mine them into blocks, and
+        verify later that a document hash exists on-chain.
     </div>
     """,
     unsafe_allow_html=True,
@@ -129,8 +135,8 @@ if page == "Dashboard":
     st.markdown(
         """
         <div class="status-card">
-            Use the sidebar to queue documents, inspect pending records, verify
-            a hash, or browse the blockchain.
+            Use the sidebar to upload documents, inspect pending records, verify
+            a hash, or browse the persisted blockchain.
         </div>
         """,
         unsafe_allow_html=True,
@@ -139,7 +145,11 @@ if page == "Dashboard":
 elif page == "Add Document":
     st.header("Add Document Record")
     with st.form("add_document_form"):
-        document_hash = st.text_input("Document Hash (SHA-256)", max_chars=128)
+        uploaded_file = st.file_uploader(
+            "Document File",
+            type=None,
+            help="Upload PDFs, text files, or other document formats to store in SQLite.",
+        )
         document_name = st.text_input("Document Name")
         issuer = st.text_input("Issuer")
         owner = st.text_input("Owner")
@@ -148,20 +158,37 @@ elif page == "Add Document":
         submitted = st.form_submit_button("Queue Document")
 
     if submitted:
-        payload = {
-            "document_hash": document_hash,
-            "document_name": document_name,
-            "issuer": issuer,
-            "owner": owner,
-            "document_type": document_type,
-            "issued_at": issued_at,
-        }
-        data, error = api_request("POST", "/add_document", payload=payload)
-        if error:
-            st.error(error)
+        if uploaded_file is None:
+            st.error("Please upload a file before submitting.")
         else:
-            st.success(data["message"])
-            st.caption(f"Pending documents: {data['pending_count']}")
+            file_bytes = uploaded_file.getvalue()
+            files = {
+                "file": (
+                    uploaded_file.name,
+                    file_bytes,
+                    uploaded_file.type or "application/octet-stream",
+                )
+            }
+            form_data = {
+                "document_name": document_name,
+                "issuer": issuer,
+                "owner": owner,
+                "document_type": document_type,
+                "issued_at": issued_at,
+            }
+            data, error = api_request(
+                "POST",
+                "/add_document",
+                files=files,
+                form_data=form_data,
+            )
+            if error:
+                st.error(error)
+            else:
+                st.success(data["message"])
+                st.caption(f"Pending documents: {data['pending_count']}")
+                st.code(data["document_hash"], language="text")
+                st.json(data["document"])
 
 elif page == "Pending Documents":
     st.header("Pending Documents")

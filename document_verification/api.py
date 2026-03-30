@@ -1,16 +1,31 @@
 """Flask application for the document verification blockchain service."""
 
+import hashlib
+import os
+from pathlib import Path
+
 from flask import Flask, jsonify, request
 from werkzeug.exceptions import BadRequest
 
 from .core import Blockchain
+from .storage import BlockchainRepository
+
+DEFAULT_DATABASE_PATH = Path(__file__).resolve().parent.parent / "blockchain.db"
 
 
-def create_app():
+def create_app(config=None):
     """Create and configure the Flask application."""
     app = Flask(__name__)
-    blockchain = Blockchain()
+    app.config["DATABASE_PATH"] = os.getenv(
+        "BLOCKCHAIN_DB_PATH", str(DEFAULT_DATABASE_PATH)
+    )
+    if config:
+        app.config.update(config)
+
+    repository = BlockchainRepository(app.config["DATABASE_PATH"])
+    blockchain = Blockchain(repository=repository)
     app.config["blockchain"] = blockchain
+    app.config["repository"] = repository
 
     @app.errorhandler(405)
     def method_not_allowed(_error):
@@ -55,6 +70,37 @@ def create_app():
     @app.route("/add_document", methods=["POST"])
     def add_document():
         """Queue a document record to be included in the next mined block."""
+        if request.files:
+            uploaded_file = request.files.get("file")
+            if uploaded_file is None or not uploaded_file.filename:
+                return jsonify({"error": "A file upload is required."}), 400
+
+            file_bytes = uploaded_file.read()
+            if not file_bytes:
+                return jsonify({"error": "Uploaded file is empty."}), 400
+
+            payload = {
+                "document_hash": hashlib.sha256(file_bytes).hexdigest(),
+                "document_name": _clean_text(request.form.get("document_name"))
+                or uploaded_file.filename,
+                "issuer": _clean_text(request.form.get("issuer")),
+                "owner": _clean_text(request.form.get("owner")),
+                "document_type": _clean_text(request.form.get("document_type")),
+                "issued_at": _clean_text(request.form.get("issued_at")),
+                "file_name": uploaded_file.filename,
+                "content_type": uploaded_file.mimetype or "application/octet-stream",
+                "file_size": len(file_bytes),
+            }
+            document = blockchain.add_document(payload, file_bytes=file_bytes)
+            response = {
+                "message": "Document record added to pending queue.",
+                "pending_count": len(blockchain.pending_documents),
+                "document_hash": document["document_hash"],
+                "document_id": document["id"],
+                "document": document,
+            }
+            return jsonify(response), 201
+
         try:
             payload = request.get_json(force=False, silent=False)
         except BadRequest:
@@ -67,10 +113,13 @@ def create_app():
         if not document_hash:
             return jsonify({"error": "document_hash is required"}), 400
 
-        blockchain.add_document(payload)
+        document = blockchain.add_document(payload)
         response = {
             "message": "Document record added to pending queue.",
             "pending_count": len(blockchain.pending_documents),
+            "document_hash": document["document_hash"],
+            "document_id": document.get("id"),
+            "document": document,
         }
         return jsonify(response), 201
 
@@ -88,3 +137,11 @@ def create_app():
         return jsonify(verification), 200
 
     return app
+
+
+def _clean_text(value):
+    """Normalize optional text form values."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
