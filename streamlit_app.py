@@ -82,8 +82,8 @@ st.title("Document Verification Blockchain")
 st.markdown(
     """
     <div class="hero">
-        Upload documents, store them in the database, mine them into blocks, and
-        verify later that a document hash exists on-chain.
+        Upload a document, store it in the database, let the backend compute a
+        fingerprint from the file and metadata, then mine and verify it on-chain.
     </div>
     """,
     unsafe_allow_html=True,
@@ -144,29 +144,34 @@ if page == "Dashboard":
 
 elif page == "Add Document":
     st.header("Add Document Record")
+    st.caption(
+        "Upload a document and optional metadata. The backend computes the "
+        "document hash automatically, and submission time is recorded for you."
+    )
     with st.form("add_document_form"):
-        uploaded_file = st.file_uploader(
+        document_file = st.file_uploader(
             "Document File",
             type=None,
-            help="Upload PDFs, text files, or other document formats to store in SQLite.",
+            help="Upload PDFs, text files, or other unstructured document formats.",
         )
         document_name = st.text_input("Document Name")
         issuer = st.text_input("Issuer")
         owner = st.text_input("Owner")
         document_type = st.text_input("Document Type")
         issued_at = st.text_input("Issued At")
+        document_summary = st.text_input("One-Line Summary")
         submitted = st.form_submit_button("Queue Document")
 
     if submitted:
-        if uploaded_file is None:
-            st.error("Please upload a file before submitting.")
+        if document_file is None:
+            st.error("Please upload a document file.")
         else:
-            file_bytes = uploaded_file.getvalue()
+            file_bytes = document_file.getvalue()
             files = {
-                "file": (
-                    uploaded_file.name,
+                "document_file": (
+                    document_file.name,
                     file_bytes,
-                    uploaded_file.type or "application/octet-stream",
+                    document_file.type or "application/octet-stream",
                 )
             }
             form_data = {
@@ -175,6 +180,7 @@ elif page == "Add Document":
                 "owner": owner,
                 "document_type": document_type,
                 "issued_at": issued_at,
+                "document_summary": document_summary,
             }
             data, error = api_request(
                 "POST",
@@ -186,8 +192,9 @@ elif page == "Add Document":
                 st.error(error)
             else:
                 st.success(data["message"])
-                st.caption(f"Pending documents: {data['pending_count']}")
+                st.write("Computed Document Hash")
                 st.code(data["document_hash"], language="text")
+                st.caption(f"Pending documents: {data['pending_count']}")
                 st.json(data["document"])
 
 elif page == "Pending Documents":

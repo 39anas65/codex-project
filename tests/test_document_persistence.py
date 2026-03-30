@@ -1,10 +1,10 @@
-import hashlib
 import io
 import sqlite3
 
 import pytest
 
 from document_verification.api import create_app
+from document_verification.core import Blockchain
 
 
 @pytest.fixture
@@ -14,8 +14,7 @@ def database_path(tmp_path):
 
 @pytest.fixture
 def app(database_path):
-    app = create_app({"TESTING": True, "DATABASE_PATH": str(database_path)})
-    return app
+    return create_app({"TESTING": True, "DATABASE_PATH": str(database_path)})
 
 
 @pytest.fixture
@@ -35,29 +34,32 @@ def test_app_creates_single_genesis_block_and_reloads_it(database_path):
 
 def test_upload_persists_binary_file_and_metadata(client, database_path):
     payload = b"%PDF-1.4 fake pdf bytes"
+    metadata = {
+        "document_name": "Course Certificate",
+        "issuer": "ABC Academy",
+        "owner": "John Doe",
+        "document_type": "certificate",
+        "issued_at": "2026-03-30",
+        "document_summary": "Course completion certificate",
+    }
     response = client.post(
         "/add_document",
-        data={
-            "file": (io.BytesIO(payload), "certificate.pdf"),
-            "document_name": "Course Certificate",
-            "issuer": "ABC Academy",
-            "owner": "John Doe",
-            "document_type": "certificate",
-            "issued_at": "2026-03-30",
-        },
+        data={"document_file": (io.BytesIO(payload), "certificate.pdf"), **metadata},
         content_type="multipart/form-data",
     )
 
     assert response.status_code == 201
     data = response.get_json()
+    expected_hash = Blockchain.build_document_hash(payload, metadata)
     assert data["pending_count"] == 1
     assert data["document"]["file_name"] == "certificate.pdf"
     assert data["document"]["file_size"] == len(payload)
-    assert data["document_hash"] == hashlib.sha256(payload).hexdigest()
+    assert data["document"]["document_summary"] == metadata["document_summary"]
+    assert data["document_hash"] == expected_hash
 
     with sqlite3.connect(database_path) as connection:
         row = connection.execute(
-            "SELECT file_name, content_type, file_size, file_data, status FROM documents"
+            "SELECT file_name, content_type, file_size, file_data, status, document_summary FROM documents"
         ).fetchone()
 
     assert row[0] == "certificate.pdf"
@@ -65,6 +67,7 @@ def test_upload_persists_binary_file_and_metadata(client, database_path):
     assert row[2] == len(payload)
     assert row[3] == payload
     assert row[4] == "pending"
+    assert row[5] == metadata["document_summary"]
 
 
 def test_upload_accepts_text_files_and_mining_persists_chain_state(client, database_path):
@@ -72,8 +75,9 @@ def test_upload_accepts_text_files_and_mining_persists_chain_state(client, datab
     upload_response = client.post(
         "/add_document",
         data={
-            "file": (io.BytesIO(payload), "notes.txt"),
+            "document_file": (io.BytesIO(payload), "notes.txt"),
             "owner": "Alice",
+            "document_summary": "Plain text note",
         },
         content_type="multipart/form-data",
     )
@@ -85,6 +89,7 @@ def test_upload_accepts_text_files_and_mining_persists_chain_state(client, datab
     assert mined_block["index"] == 2
     assert len(mined_block["documents"]) == 1
     assert mined_block["documents"][0]["file_name"] == "notes.txt"
+    assert mined_block["documents"][0]["document_summary"] == "Plain text note"
 
     with sqlite3.connect(database_path) as connection:
         block_count = connection.execute("SELECT COUNT(*) FROM blocks").fetchone()[0]
@@ -96,14 +101,14 @@ def test_upload_accepts_text_files_and_mining_persists_chain_state(client, datab
     restarted_app = create_app({"TESTING": True, "DATABASE_PATH": str(database_path)})
     restarted_chain = restarted_app.config["blockchain"].chain
     assert len(restarted_chain) == 2
-    assert restarted_chain[1]["documents"][0]["document_hash"] == hashlib.sha256(payload).hexdigest()
+    assert restarted_chain[1]["documents"][0]["document_hash"] == upload_response.get_json()["document_hash"]
 
 
 def test_verify_document_returns_persisted_mined_record(client):
     payload = b"verification payload"
     upload_response = client.post(
         "/add_document",
-        data={"file": (io.BytesIO(payload), "verify.txt")},
+        data={"document_file": (io.BytesIO(payload), "verify.txt")},
         content_type="multipart/form-data",
     )
     document_hash = upload_response.get_json()["document_hash"]
@@ -120,9 +125,9 @@ def test_verify_document_returns_persisted_mined_record(client):
 def test_upload_requires_non_empty_file(client):
     response = client.post(
         "/add_document",
-        data={"file": (io.BytesIO(b""), "empty.txt")},
+        data={"document_file": (io.BytesIO(b""), "empty.txt")},
         content_type="multipart/form-data",
     )
 
     assert response.status_code == 400
-    assert response.get_json()["error"] == "Uploaded file is empty."
+    assert response.get_json()["error"] == "document_file cannot be empty"

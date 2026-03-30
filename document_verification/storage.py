@@ -14,6 +14,7 @@ DOCUMENT_COLUMNS = (
     "owner",
     "document_type",
     "issued_at",
+    "document_summary",
     "submitted_at",
     "file_name",
     "content_type",
@@ -56,6 +57,7 @@ class BlockchainRepository:
                     owner TEXT,
                     document_type TEXT,
                     issued_at TEXT,
+                    document_summary TEXT,
                     submitted_at TEXT NOT NULL,
                     file_name TEXT,
                     content_type TEXT,
@@ -66,6 +68,17 @@ class BlockchainRepository:
                     FOREIGN KEY(block_id) REFERENCES blocks(id)
                 );
                 """
+            )
+            self._ensure_column(connection, "documents", "document_summary", "TEXT")
+
+    def _ensure_column(self, connection, table_name, column_name, column_type):
+        columns = {
+            row["name"]
+            for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+        }
+        if column_name not in columns:
+            connection.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
             )
 
     def load_blocks(self):
@@ -90,6 +103,7 @@ class BlockchainRepository:
                            owner,
                            document_type,
                            issued_at,
+                           document_summary,
                            submitted_at,
                            file_name,
                            content_type,
@@ -123,6 +137,7 @@ class BlockchainRepository:
                        owner,
                        document_type,
                        issued_at,
+                       document_summary,
                        submitted_at,
                        file_name,
                        content_type,
@@ -143,6 +158,7 @@ class BlockchainRepository:
             document_record.get("owner"),
             document_record.get("document_type"),
             document_record.get("issued_at"),
+            document_record.get("document_summary"),
             document_record["submitted_at"],
             document_record.get("file_name"),
             document_record.get("content_type"),
@@ -159,6 +175,7 @@ class BlockchainRepository:
                     owner,
                     document_type,
                     issued_at,
+                    document_summary,
                     submitted_at,
                     file_name,
                     content_type,
@@ -166,7 +183,7 @@ class BlockchainRepository:
                     file_data,
                     status
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
                 """,
                 values,
             )
@@ -180,6 +197,7 @@ class BlockchainRepository:
                        owner,
                        document_type,
                        issued_at,
+                       document_summary,
                        submitted_at,
                        file_name,
                        content_type,

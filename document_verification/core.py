@@ -13,6 +13,7 @@ OPTIONAL_DOCUMENT_FIELDS = (
     "owner",
     "document_type",
     "issued_at",
+    "document_summary",
 )
 
 
@@ -56,6 +57,31 @@ class Blockchain:
         """Return the most recently added block."""
         return self.chain[-1]
 
+    @staticmethod
+    def normalize_metadata(payload):
+        """Return normalized optional metadata fields from a payload."""
+        normalized = {}
+        for field in OPTIONAL_DOCUMENT_FIELDS:
+            value = payload.get(field)
+            if value is not None and str(value).strip():
+                normalized[field] = str(value).strip()
+        return normalized
+
+    @classmethod
+    def build_document_hash(cls, file_bytes, payload):
+        """Build a deterministic SHA-256 hash from file bytes and metadata."""
+        metadata = cls.normalize_metadata(payload)
+        canonical_payload = {
+            "file_sha256": hashlib.sha256(file_bytes).hexdigest(),
+            "metadata": {field: metadata.get(field, "") for field in OPTIONAL_DOCUMENT_FIELDS},
+        }
+        encoded_payload = json.dumps(
+            canonical_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return hashlib.sha256(encoded_payload).hexdigest()
+
     def add_document(self, payload, file_bytes=None):
         """Queue a document record to be mined into the next block."""
         document_hash = str(payload["document_hash"]).strip()
@@ -63,10 +89,7 @@ class Blockchain:
             "document_hash": document_hash,
             "submitted_at": datetime.datetime.now().isoformat(),
         }
-        for field in OPTIONAL_DOCUMENT_FIELDS:
-            value = payload.get(field)
-            if value is not None and str(value).strip():
-                document[field] = str(value).strip()
+        document.update(self.normalize_metadata(payload))
         for field in ("file_name", "content_type", "file_size"):
             value = payload.get(field)
             if value is not None and str(value).strip():
