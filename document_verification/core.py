@@ -18,16 +18,28 @@ OPTIONAL_DOCUMENT_FIELDS = (
 
 
 class Blockchain:
-    """Manage a simple in-memory blockchain with queued document records."""
+    """Manage a simple blockchain with persisted queued document records."""
 
-    def __init__(self):
-        """Initialize the blockchain with a genesis block."""
+    def __init__(self, repository=None):
+        """Initialize the blockchain from persisted state when available."""
+        self.repository = repository
         self.chain = []
         self.pending_documents = []
-        self.create_block(proof=1, previous_hash="0", documents=[])
+        self._load_state()
 
-    def create_block(self, proof, previous_hash, documents=None):
-        """Create a block, append it to the chain, and return it."""
+    def _load_state(self):
+        """Restore blockchain and pending queue from the repository."""
+        if self.repository is None:
+            self.create_block(proof=1, previous_hash="0", documents=[], persist=False)
+            return
+
+        self.chain = self.repository.load_blocks()
+        self.pending_documents = self.repository.load_pending_documents()
+        if not self.chain:
+            self.create_block(proof=1, previous_hash="0", documents=[], persist=True)
+
+    def create_block(self, proof, previous_hash, documents=None, persist=True):
+        """Create a block, append it to the chain, and optionally persist it."""
         block = {
             "index": len(self.chain) + 1,
             "timestamp": datetime.datetime.now().isoformat(),
@@ -36,6 +48,9 @@ class Blockchain:
             "documents": list(documents or []),
         }
         self.chain.append(block)
+        if persist and self.repository is not None:
+            document_ids = [document["id"] for document in block["documents"]]
+            self.repository.persist_block(block, document_ids)
         return block
 
     def get_previous_block(self):
@@ -67,7 +82,7 @@ class Blockchain:
         ).encode()
         return hashlib.sha256(encoded_payload).hexdigest()
 
-    def add_document(self, payload):
+    def add_document(self, payload, file_bytes=None):
         """Queue a document record to be mined into the next block."""
         document_hash = str(payload["document_hash"]).strip()
         document = {
@@ -75,6 +90,17 @@ class Blockchain:
             "submitted_at": datetime.datetime.now().isoformat(),
         }
         document.update(self.normalize_metadata(payload))
+        for field in ("file_name", "content_type", "file_size"):
+            value = payload.get(field)
+            if value is not None and str(value).strip():
+                if field == "file_size":
+                    document[field] = int(value)
+                else:
+                    document[field] = str(value).strip()
+        if "document_name" not in document and document.get("file_name"):
+            document["document_name"] = document["file_name"]
+        if self.repository is not None:
+            document = self.repository.insert_document(document, file_bytes)
         self.pending_documents.append(document)
         return document
 
@@ -114,10 +140,10 @@ class Blockchain:
     def proof_of_work(self, previous_proof):
         """Find a proof value that satisfies the current difficulty rule."""
         new_proof = 1
-        previous_proof_squared = previous_proof ** 2
+        previous_proof_squared = previous_proof**2
         while True:
             hash_operation = hashlib.sha256(
-                str(new_proof ** 2 - previous_proof_squared).encode()
+                str(new_proof**2 - previous_proof_squared).encode()
             ).hexdigest()
             if hash_operation[:POW_PREFIX_LENGTH] == POW_PREFIX:
                 return new_proof
@@ -150,7 +176,7 @@ class Blockchain:
             previous_proof = previous_block["proof"]
             proof = block["proof"]
             hash_operation = hashlib.sha256(
-                str(proof ** 2 - previous_proof ** 2).encode()
+                str(proof**2 - previous_proof**2).encode()
             ).hexdigest()
             if hash_operation[:POW_PREFIX_LENGTH] != POW_PREFIX:
                 return False

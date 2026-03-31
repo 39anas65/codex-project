@@ -12,10 +12,9 @@ from document_verification import Blockchain, create_app
 
 
 @pytest.fixture()
-def client():
+def client(tmp_path):
     """Return a Flask test client for the API."""
-    app = create_app()
-    app.config["TESTING"] = True
+    app = create_app({"TESTING": True, "DATABASE_PATH": str(tmp_path / "verification.db")})
     return app.test_client()
 
 

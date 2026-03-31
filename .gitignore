@@ -25,6 +25,7 @@ htmlcov/
 
 # Logs and temp files
 *.log
+*.db
 *.tmp
 *.temp
 *.bak
