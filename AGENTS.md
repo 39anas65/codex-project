@@ -4,21 +4,21 @@
 The project is currently centered on [`blockchain.py`](/D:/ML-Portfolio/BlockChain/blockchain.py), which contains the `Blockchain` class, Flask app setup, and API routes. Planning and product scope live in [`SPEC.md`](/D:/ML-Portfolio/BlockChain/SPEC.md). Runtime artifacts such as [`error.log`](/D:/ML-Portfolio/BlockChain/error.log) and [`__pycache__/`](/D:/ML-Portfolio/BlockChain/__pycache__) are not source files. As the app grows, keep Flask API logic in `blockchain.py`, place the Streamlit UI in `streamlit_app.py`, and add automated tests under `tests/`.
 
 ## Build, Test, and Development Commands
-Install dependencies with `pip install flask streamlit requests pytest`.
+Install and sync dependencies with `uv sync --dev`.
 
 Run the Flask API locally:
 ```powershell
-python blockchain.py
+uv run python blockchain.py
 ```
 
 Run the Streamlit UI:
 ```powershell
-streamlit run streamlit_app.py
+uv run streamlit run streamlit_app.py
 ```
 
 Run tests:
 ```powershell
-pytest
+uv run pytest
 ```
 
 Useful manual checks:

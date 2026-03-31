@@ -363,19 +363,19 @@ message.
 Install dependencies:
 
 ```powershell
-pip install flask streamlit requests
+uv sync --dev
 ```
 
 Run the backend API:
 
 ```powershell
-python blockchain.py
+uv run python blockchain.py
 ```
 
 Run the Streamlit UI:
 
 ```powershell
-streamlit run streamlit_app.py
+uv run streamlit run streamlit_app.py
 ```
 
 ## Data Model
