@@ -9,6 +9,13 @@ fingerprint exists on-chain.
 The codebase is intentionally lightweight and readable. It is designed for
 learning and demos rather than for production use.
 
+## Demo
+
+<video src="./browser-test-recording.webm" controls muted playsinline width="100%"></video>
+
+If the embedded player does not render in your GitHub view, open
+[`browser-test-recording.webm`](./browser-test-recording.webm) directly.
+
 ## Features
 
 - in-memory blockchain with a genesis block
@@ -27,10 +34,10 @@ learning and demos rather than for production use.
 - `streamlit_app.py`: Streamlit user interface
 - `SPEC.md`: product specification for the MVP
 
-## Install Dependencies
+## Setup With uv
 
 ```bash
-pip install flask streamlit requests
+uv sync --dev
 ```
 
 ## Run Locally
@@ -38,19 +45,28 @@ pip install flask streamlit requests
 1. Start the Flask backend:
 
 ```bash
-python blockchain.py
+uv run python blockchain.py
 ```
 
 2. In a separate terminal, start the Streamlit UI:
 
 ```bash
-streamlit run streamlit_app.py
+uv run streamlit run streamlit_app.py
 ```
 
 3. Open the applications:
 
 - Flask API: `http://127.0.0.1:5000`
 - Streamlit UI: `http://localhost:8501`
+
+If `uv` is not installed yet, install it first from the official Astral
+instructions: `https://docs.astral.sh/uv/getting-started/installation/`
+
+## Run Tests
+
+```bash
+uv run pytest
+```
 
 ## API Endpoints
 
