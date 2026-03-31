@@ -11,7 +11,7 @@ learning and demos rather than for production use.
 
 ## Demo
 
-![Demo](./browser-test-recording.mp4)
+https://github.com/user-attachments/assets/64fcc63e-e8ac-4748-91cd-0b7bdc4a35fa
 
 ## Features
 
