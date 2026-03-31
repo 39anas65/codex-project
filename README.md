@@ -11,10 +11,7 @@ learning and demos rather than for production use.
 
 ## Demo
 
-<video src="./browser-test-recording.webm" controls muted playsinline width="100%"></video>
-
-If the embedded player does not render in your GitHub view, open
-[`browser-test-recording.webm`](./browser-test-recording.webm) directly.
+![Demo](./browser-test-recording.mp4)
 
 ## Features
 
